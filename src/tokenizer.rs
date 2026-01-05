@@ -268,7 +268,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
           }
           if i+level >= chars.len() || chars[i+level] == ' ' {
             data.flush_and_add_token(Token::BlockQuote(level.try_into().unwrap())); // never overflows
-            i += level - 1;
+            i += level;
           }
         }
       }
