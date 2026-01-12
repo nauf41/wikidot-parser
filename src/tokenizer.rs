@@ -12,18 +12,17 @@ pub enum Token {
   ElementBegin{name: String, attributes: Vec<(String, String)>}, // [[span style="color:red"]]
   ElementEnd(String), // [[/span]]
   ColoredBeginColorCode(String), // ##color|
-  ColoredBeginColorName(&'static str),
+  ColoredBeginColorName(String), // TODO: Enum化も検討
   ColoredEnd, // ##
-  EscapeParsing, // @@
   NamedLink{link: String, name: String},
   PageLink{link: String, name: String},
-  Asterisk, // * (sometimes mean – target="_blank")
-  BlockQuote(u8), // >>>> max nested is 255
-  CellSeparator, // ||
-  TableHeaderCellSeparator, // ||~
+  BlockQuote(std::num::NonZeroUsize), // TODO: u8で管理していた頃の名残のコードを吹き飛ばす
+  CellSeparator(Option<crate::block::table_cell::Style>), // ||[~<=>]?
+  NewLine, // \n
 
   Text(String)
 }
+
 
 struct TokenData {
   res: Vec<Token>,
@@ -54,10 +53,9 @@ impl TokenData {
     self.res.push(t);
   }
 
-  fn get_value(self) -> (Vec<Token>, String) {
-    let mut this = self;
-    this.flush();
-    (this.res, this.buf)
+  fn get_value(mut self) -> Vec<Token> {
+    self.flush();
+    self.res
   }
 }
 
@@ -69,6 +67,7 @@ fn is_next_eq(at: usize, v: &Vec<char>, c: char) -> bool {
   }
 }
 
+/// CRは壊れます
 fn get_unescaped_string(s: &[char]) -> String {
   let mut target_str: String = String::new(); // エスケープを取り除かれた文字列
   let mut ignore_next = false;
@@ -88,14 +87,14 @@ fn get_unescaped_string(s: &[char]) -> String {
 }
 
 // TODO \n|の処理を書く
-pub fn tokenize(s: &str) -> Vec<Token> {
+pub fn tokenize(s: String) -> Vec<Token> {
   let mut data: TokenData = TokenData::new();
 
   let chars: Vec<char> = s.chars().collect();
 
   let mut is_escaping_parse = false;
 
-  // TODO: optimize by making this static and changing type to HashMap
+  // TODO: optimize by making this static
   let tokenize_if_double: Vec<(char, Token)> = vec![
     ('*', Token::Bold),
     ('/', Token::Italics),
@@ -105,8 +104,6 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     ('}', Token::MonospacedClose),
     ('^', Token::SuperScript),
     (',', Token::SubScript),
-    ('@', Token::EscapeParsing),
-    ('|', Token::CellSeparator),
   ];
 
   let mut i = 0;
@@ -114,7 +111,6 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     // check escape
     if chars[i] == '@' {
       if is_next_eq(i, &chars, '@') {
-        data.flush_and_add_token(Token::EscapeParsing);
         i += 2;
         is_escaping_parse = !is_escaping_parse;
         continue 'chars_loop;
@@ -138,6 +134,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     }
 
     match chars[i] {
+      // TODO: is_in_double_quotationを実装
       '[' => 'square_brace: {
         if is_next_eq(i, &chars, '[') {
           if is_next_eq(i+1, &chars, '[') {
@@ -171,27 +168,25 @@ pub fn tokenize(s: &str) -> Vec<Token> {
               if chars[i+1+elem_specifier_len] != '\\' && chars[i+2+elem_specifier_len] == ']' && is_next_eq(i+2+elem_specifier_len, &chars, ']') {
                 break;
               }
-              if chars[i+2+elem_specifier_len] == '\n' {
-                break 'square_brace;
-              }
+              // \nは許す
               elem_specifier_len+=1;
             };
 
             let target_str: String = get_unescaped_string(&chars[i+2..i+2+elem_specifier_len]);
 
-            if target_str.starts_with("/") {
+            if target_str.starts_with("/") { // 閉じタグ
               data.flush_and_add_token(Token::ElementEnd((&target_str[1..]).into()));
             } else {
               let mut name = String::new();
               let mut attributes: Vec<(String, String)> = vec![];
 
-              for (at, v) in target_str.split_whitespace().enumerate() {
+              for (at, v) in target_str.replace("|", " ").split_whitespace().enumerate() {
                 if at == 0 {
                   name = String::from(v);
                 }
                 else {
                   if v.contains('=') {
-                    let v: Vec<_> = v.splitn(2, '=').collect();
+                    let mut v: Vec<&str> = v.splitn(2, '=').collect();
                     if v[0].len() > 0 && v[1].len() > 2 {
                       attributes.push((String::from(v[0]), String::from(&v[1][1..(v[1].len()-1)])));
                     }
@@ -237,17 +232,22 @@ pub fn tokenize(s: &str) -> Vec<Token> {
       '|' => {
         if is_next_eq(i, &chars, '|') {
           if is_next_eq(i+1, &chars, '~') {
-            data.flush_and_add_token(Token::TableHeaderCellSeparator);
+            data.flush_and_add_token(Token::CellSeparator(Some(crate::block::table_cell::Style::Title)));
+            i += 2;
+          } else if is_next_eq(i+1, &chars, '<') {
+            data.flush_and_add_token(Token::CellSeparator(Some(crate::block::table_cell::Style::LeftAligned)));
+            i += 2;
+          } else if is_next_eq(i+1, &chars, '>') {
+            data.flush_and_add_token(Token::CellSeparator(Some(crate::block::table_cell::Style::RightAligned)));
+            i += 2;
+          } else if is_next_eq(i+1, &chars, '=') {
+            data.flush_and_add_token(Token::CellSeparator(Some(crate::block::table_cell::Style::CenterAligned)));
             i += 2;
           } else {
-            data.flush_and_add_token(Token::CellSeparator);
+            data.flush_and_add_token(Token::CellSeparator(None));
             i += 1;
           }
         }
-      }
-
-      '*' => {
-        data.flush_and_add_token(Token::Asterisk);
       }
 
       '\\' => {
@@ -263,7 +263,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
       '>' => {
         if i == 0 || chars[i-1] == '\n' {
           let mut level: usize = 1;
-          while level < u8::MAX.into() && is_next_eq(level - 1 + i, &chars, '>') {
+          while is_next_eq(level - 1 + i, &chars, '>') {
             level += 1;
           }
           if i+level >= chars.len() || chars[i+level] == ' ' {
@@ -288,11 +288,12 @@ pub fn tokenize(s: &str) -> Vec<Token> {
 
             if ok {
               data.flush_and_add_token(Token::ColoredBeginColorCode((&chars[i+2..i+8]).iter().collect()));
-              i += 2 + 6 + 1 - 1;
+              i += 2 /* ## */ + 6 /* RGB */ + 1 /* | */ - 1;
               break 'sharp_match;
             }
           }
 
+          // FIXME: ast::WikidotColorを使用するように変更する
           let wikidot_preset_colors = vec![
             "aqua",
             "black",
@@ -316,7 +317,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
 
           for wikidot_preset_color_string in wikidot_preset_colors {
             if s.starts_with(wikidot_preset_color_string) && s.chars().nth(wikidot_preset_color_string.len()) == Some('|') {
-              data.flush_and_add_token(Token::ColoredBeginColorName(wikidot_preset_color_string));
+              data.flush_and_add_token(Token::ColoredBeginColorName(String::from(wikidot_preset_color_string)));
               i += 2 + wikidot_preset_color_string.len() + 1 - 1;
               break 'sharp_match;
             }
@@ -327,6 +328,10 @@ pub fn tokenize(s: &str) -> Vec<Token> {
         }
       }
 
+      '\n' => {
+        data.flush_and_add_token(Token::NewLine);
+      }
+
       _ => {
         data.add_char(chars[i]);
       }
@@ -335,12 +340,15 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     i += 1;
   }
 
-  data.get_value().0
+  data.get_value()
 }
 
 #[cfg(test)]
 mod test {
-  use super::*;
+  use super::Token;
+  fn tokenize(s: &str) -> Vec<super::Token> {
+    super::tokenize(String::from(s))
+  }
 
   #[test]
   fn test_empty() {
@@ -446,7 +454,7 @@ mod test {
   fn test_colored_colorname() {
     assert_eq!(tokenize("bbb##green|Test Passed##aaa"), vec![
       Token::Text(String::from("bbb")),
-      Token::ColoredBeginColorName("green"),
+      Token::ColoredBeginColorName(String::from("green")),
       Token::Text(String::from("Test Passed")),
       Token::ColoredEnd,
       Token::Text(String::from("aaa")),
@@ -471,28 +479,25 @@ mod test {
   #[test]
   fn test_asterisk() {
     assert_eq!(tokenize("hey*ho"), vec![
-      Token::Text(String::from("hey")),
-      Token::Asterisk,
-      Token::Text(String::from("ho")),
+      Token::Text(String::from("hey*ho")),
     ])
   }
 
   #[test]
   fn test_quoteblock() {
     assert_eq!(tokenize("> One\n>> Two\n>> Three\n> Four\nFive"), vec![
-      Token::BlockQuote(1), Token::Text(String::from("One\n")),
-      Token::BlockQuote(2), Token::Text(String::from("Two\n")),
-      Token::BlockQuote(2), Token::Text(String::from("Three\n")),
-      Token::BlockQuote(1), Token::Text(String::from("Four\nFive")),
+      Token::BlockQuote(std::num::NonZeroUsize::new(1).unwrap()), Token::Text(String::from("One")),
+      Token::NewLine, Token::BlockQuote(std::num::NonZeroUsize::new(2).unwrap()), Token::Text(String::from("Two")),
+      Token::NewLine, Token::BlockQuote(std::num::NonZeroUsize::new(2).unwrap()), Token::Text(String::from("Three")),
+      Token::NewLine, Token::BlockQuote(std::num::NonZeroUsize::new(1).unwrap()), Token::Text(String::from("Four")),
+      Token::NewLine, Token::Text(String::from("Five")),
     ]);
   }
 
   #[test]
   fn test_escape_parsing() {
     assert_eq!(tokenize("@@**Should not be bolded**@@"), vec![
-      Token::EscapeParsing,
       Token::Text(String::from("**Should not be bolded**")),
-      Token::EscapeParsing,
     ]);
   }
 }
