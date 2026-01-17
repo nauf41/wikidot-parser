@@ -48,6 +48,7 @@ pub fn parse(block_tree: Vec<crate::block::BlockLevelAttribute>) -> Vec<crate::a
       }
     } else {
       db.pop_and_merge();
+      iters.pop();
     }
   }
 

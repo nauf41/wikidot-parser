@@ -209,7 +209,7 @@ pub fn tokenize(s: String) -> Vec<Token> {
                 }
                 else if v.contains('=') {
                   let v: Vec<&str> = v.splitn(2, '=').collect();
-                  if v.len() == 2 {
+                  if v.len() == 2 && v[1].len() >= 2 {
                     attributes.push((String::from(v[0]), String::from(&v[1][1..(v[1].len()-1)])));
                   }
                 } else {

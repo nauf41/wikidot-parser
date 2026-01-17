@@ -135,6 +135,17 @@ mod tests {
   }
 
   #[test]
+  fn test_text() {
+    assert_eq!(parse(vec![
+      Token::Text(sf("Hello, World!"))
+    ]), vec![
+      BlockLevelAttribute::Inline(vec![
+        Token::Text(sf("Hello, World!"))
+      ])
+    ]);
+  }
+
+  #[test]
   fn test_blockquote() {
     use crate::tokenizer::Token;
     assert_eq!(parse(vec![
@@ -247,8 +258,8 @@ mod tests {
     assert_eq!(parsed, vec![
       BlockLevelAttribute::BlockQuote(vec![
         BlockLevelAttribute::TabView(vec![
-          BlockLevelAttribute::Tab{title: String::from("Tab "), children: vec![BlockLevelAttribute::Inline(vec![Token::Text(String::from("txt 1"))])]},
-          BlockLevelAttribute::Tab{title: String::from("Tab "), children: vec![BlockLevelAttribute::Inline(vec![Token::Text(String::from("txt 2"))])]},
+          BlockLevelAttribute::Tab{title: String::from("Tab 1"), children: vec![BlockLevelAttribute::Inline(vec![Token::Text(String::from("txt 1"))])]},
+          BlockLevelAttribute::Tab{title: String::from("Tab 2"), children: vec![BlockLevelAttribute::Inline(vec![Token::Text(String::from("txt 2"))])]},
         ]),
       ])
     ]);

@@ -1,5 +1,13 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CssSize(String);
+impl CssSize {
+  pub fn new(value: &str) -> Self {
+    todo!()
+  }
+  pub fn as_string(self) -> String {
+    self.0
+  }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Url(pub String); // TODO validate
@@ -83,11 +91,11 @@ pub enum TreeElement {
   Monospaced(Vec<TreeElement>),
   Superscript(Vec<TreeElement>),
   Subscript(Vec<TreeElement>),
-  Colored{color: WikidotColor, children: Vec<TreeElement>},
+  Colored{red: u8, green: u8, blue: u8, children: Vec<TreeElement>},
   Size{scale: CssSize, children: Vec<TreeElement>}, // scaleは有効なCSS値
   Link{href: Url, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
   InternalLink{href: String, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
-  Collapsible(Vec<TreeElement>),
+  Collapsible(Vec<TreeElement>), // TODO fix: show open/close message
   Footnote{id: u32, children: Vec<TreeElement>}, // idは構文解析時に自動的に生成
   QuoteBlock(Vec<TreeElement>),
   Iframe(String), // the value is raw HTML element string
@@ -117,7 +125,7 @@ pub enum ParseFrame {
   // Link does not contain children
   // InternalLink does not contain children
   Collapsible,
-  Footnote{id: u32},
+  Footnote{id: u32}, // TODO implement [[footnote]] syntax
   QuoteBlock,
   // Iframe is a single element. The values are written in HTML and they won't be parsed.
   Tab(String),
@@ -138,7 +146,7 @@ impl ParseFrame {
       ParseFrame::Monospaced => TreeElement::Monospaced(children),
       ParseFrame::Superscript => TreeElement::Superscript(children),
       ParseFrame::Subscript => TreeElement::Subscript(children),
-      ParseFrame::Colored{color} => TreeElement::Colored{color, children},
+      ParseFrame::Colored{red, green, blue} => TreeElement::Colored{red, green, blue, children},
       ParseFrame::Size{scale} => TreeElement::Size{scale, children},
       ParseFrame::Collapsible => TreeElement::Collapsible(children),
       ParseFrame::Footnote{id} => TreeElement::Footnote{id, children},
