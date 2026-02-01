@@ -87,7 +87,7 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
               }
 
               TagKind::FootnoteTarget => {
-                todo!();
+                db.insert_footnote_block();
               }
 
               TagKind::Include => {
@@ -112,7 +112,8 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
               }
 
               TagKind::Footnote => {
-                todo!();
+                let dat = db.get_now_children();
+                db.edit_footnote(dat);
               }
 
               TagKind::FootnoteTarget | TagKind::Include => {

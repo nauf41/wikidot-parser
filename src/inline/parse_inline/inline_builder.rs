@@ -1,9 +1,10 @@
-use crate::ast;
+use crate::ast::{self, TreeElement};
 
 pub struct InlineBuilder {
   root: Vec<ast::TreeElement>,
   data: Vec<(ast::ParseFrame, Vec<ast::TreeElement>)>,
   footnotes: Vec<Vec<ast::TreeElement>>,
+  footnoteoffset: usize,
 }
 
 impl InlineBuilder {
@@ -12,6 +13,7 @@ impl InlineBuilder {
       root: vec![],
       data: vec![],
       footnotes: vec![],
+      footnoteoffset: 0,
     }
   }
 
@@ -82,11 +84,33 @@ impl InlineBuilder {
       self.footnotes.push(elements);
     }
   }
+
+  pub fn get_now_children(&mut self) -> Vec<TreeElement> {
+    if let Some(v) = self.data.pop() {
+      v.1
+    } else {
+      panic!()
+    }
+  }
+
+  pub fn insert_footnote_block(&mut self) {
+    let v = std::mem::take(&mut self.footnotes);
+    if !v.is_empty() {
+      let offset = self.footnoteoffset;
+      self.footnoteoffset += v.len();
+      let mut result_vec = vec![];
+      for (idx, val) in v.into_iter().enumerate() {
+        result_vec.push((offset+idx, val));
+      }
+      self.add(ast::TreeElement::FootnoteTarget(result_vec));
+    }
+  }
 }
 
 impl From<InlineBuilder> for Vec<ast::TreeElement> {
   fn from(mut builder: InlineBuilder) -> Vec<ast::TreeElement> {
     while let Some(_) = builder.pop_and_merge() {}
+    builder.insert_footnote_block();
     builder.root
   }
 }

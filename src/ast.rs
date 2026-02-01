@@ -99,6 +99,7 @@ pub enum TreeElement {
   InternalLink{href: String, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
   Collapsible{text_open: String, text_closed: String, children: Vec<TreeElement>}, // TODO fix: show open/close message
   Footnote(std::num::NonZeroUsize), // idは構文解析時に自動的に生成
+  FootnoteTarget(Vec<(usize, Vec<TreeElement>)>),
   QuoteBlock(Vec<TreeElement>),
   Iframe(String), // the value is raw HTML element string
   Tab{
