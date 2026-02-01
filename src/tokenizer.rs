@@ -96,7 +96,7 @@ fn is_next_eq(at: usize, v: &[char], c: char) -> bool {
   }
 }
 
-/// CRは壊れます
+/// requires LF-formatted string
 fn get_unescaped_string(s: &[char]) -> String {
   let mut target_str: String = String::new(); // エスケープを取り除かれた文字列
   let mut ignore_next = false;
@@ -113,7 +113,6 @@ fn get_unescaped_string(s: &[char]) -> String {
   target_str
 }
 
-// TODO \n|の処理を書く
 pub fn tokenize(s: String) -> Vec<Token> {
   let mut data: TokenData = TokenData::new();
 
@@ -121,7 +120,6 @@ pub fn tokenize(s: String) -> Vec<Token> {
 
   let mut is_escaping_parse = false;
 
-  // TODO: optimize by making this static
   let tokenize_if_double: Vec<(char, Token)> = vec![
     ('*', Token::Bold),
     ('/', Token::Italics),
@@ -135,6 +133,8 @@ pub fn tokenize(s: String) -> Vec<Token> {
 
   let mut i = 0;
   'chars_loop: while i < chars.len() {
+    let mut done = false;
+    
     // check escape
     if chars[i] == '@' && is_next_eq(i, &chars, '@') {
       i += 2;
@@ -183,7 +183,7 @@ pub fn tokenize(s: String) -> Vec<Token> {
             }
 
             i += 3 + elem_specifier_len + 3;
-            continue 'chars_loop;
+            done = true;
           } else {
             // elem_begin
             let mut elem_specifier_len = 0;
@@ -220,7 +220,7 @@ pub fn tokenize(s: String) -> Vec<Token> {
               data.flush_and_add_token(Token::ElementBegin { name, attributes });
             }
             i += 2 + elem_specifier_len + 2;
-            continue 'chars_loop;
+            done = true;
           }
         } else {
           let mut elem_specifier_len = 0;
@@ -238,47 +238,51 @@ pub fn tokenize(s: String) -> Vec<Token> {
           let target_str = get_unescaped_string(&chars[i+1..i+1+elem_specifier_len]);
 
           if let Some(v) = target_str.split_once(" ") {
-            data.flush_and_add_token(Token::NamedLink {
-              link: String::from(v.0),
-              name: String::from(v.1),
-            });
+            let url_regex = regex::Regex::new(r"^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$").unwrap();
 
-            i += 1 + elem_specifier_len + 1;
-            continue 'chars_loop;
+            if url_regex.is_match(v.0) {
+              data.flush_and_add_token(Token::NamedLink {
+                link: String::from(v.0),
+                name: String::from(v.1),
+              });
+              i += 1 + elem_specifier_len + 1;
+              done = true;
+            }
           }
         }
       }
 
-      // TODO: いくつかの他の記号に対応
       '|' => {
         if is_next_eq(i, &chars, '|') {
           if is_next_eq(i+1, &chars, '~') {
             data.flush_and_add_token(Token::CellSeparator(Some(crate::ast::table_cell::Style::Title)));
-            i += 2;
+            i += 3;
           } else if is_next_eq(i+1, &chars, '<') {
             data.flush_and_add_token(Token::CellSeparator(Some(crate::ast::table_cell::Style::LeftAligned)));
-            i += 2;
+            i += 3;
           } else if is_next_eq(i+1, &chars, '>') {
             data.flush_and_add_token(Token::CellSeparator(Some(crate::ast::table_cell::Style::RightAligned)));
-            i += 2;
+            i += 3;
           } else if is_next_eq(i+1, &chars, '=') {
             data.flush_and_add_token(Token::CellSeparator(Some(crate::ast::table_cell::Style::CenterAligned)));
-            i += 2;
+            i += 3;
           } else {
             data.flush_and_add_token(Token::CellSeparator(None));
-            i += 1;
+            i += 2;
           }
+          done = true;
         }
       }
 
       '\\' => {
         if i+1 >= chars.len() || chars[i+1] == '\n' {
           data.add_char('\n');
-          i += 1;
+          i += 2;
         } else {
           data.add_char(chars[i+1]);
-          i += 1;
+          i += 2;
         }
+        done = true;
       }
 
       '>' => {
@@ -287,9 +291,10 @@ pub fn tokenize(s: String) -> Vec<Token> {
           while is_next_eq(level - 1 + i, &chars, '>') {
             level += 1;
           }
-          if i+level >= chars.len() || chars[i+level] == ' ' {
+          if i+level >= chars.len() || (chars[i+level] == ' ' || chars[i+level] == '\n') {
             data.flush_and_add_token(Token::BlockQuote(level.try_into().unwrap())); // never overflows
-            i += level;
+            i += level + 1;
+            done = true;
           }
         }
       }
@@ -309,7 +314,8 @@ pub fn tokenize(s: String) -> Vec<Token> {
 
             if ok {
               data.flush_and_add_token(Token::ColoredBeginColorCode(chars[i+2..i+8].iter().collect()));
-              i += 2 /* ## */ + 6 /* RGB */ + 1 /* | */ - 1;
+              i += 2 /* ## */ + 6 /* RGB */ + 1 /* | */;
+              done = true;
               break 'sharp_match;
             }
           }
@@ -339,26 +345,32 @@ pub fn tokenize(s: String) -> Vec<Token> {
           for wikidot_preset_color_string in wikidot_preset_colors {
             if s.starts_with(wikidot_preset_color_string) && s.chars().nth(wikidot_preset_color_string.len()) == Some('|') {
               data.flush_and_add_token(Token::ColoredBeginColorName(String::from(wikidot_preset_color_string)));
-              i += 2 + wikidot_preset_color_string.len() + 1 - 1;
+              i += 2 + wikidot_preset_color_string.len() + 1;
+              done = true;
               break 'sharp_match;
             }
           }
 
           data.flush_and_add_token(Token::ColoredEnd);
-          i+=1;
+          i+=2;
+          done = true;
         }
       }
 
       '\n' => {
         data.flush_and_add_token(Token::NewLine);
+        i += 1;
+        done = true;
       }
 
-      _ => {
-        data.add_char(chars[i]);
-      }
+      _ => {}
     };
 
-    i += 1;
+    if !done {
+      data.add_char(chars[i]);
+      i += 1;
+    }
+
   }
 
   data.get_value()

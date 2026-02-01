@@ -9,3 +9,11 @@
 
 ## componentの実装
 - トレイトをimplして実装。各自テンプレート文字列を持っておき、値を代入の上、個別に当パーサに通してVec\<InlineItem\>でreturn
+
+## セキュリティへの配慮
+
+**対処した内容**
+* Stack-overflow
+
+**対処しない内容**
+* usizeのoverflowによるpanic

@@ -1,6 +1,8 @@
 mod inline_builder;
 
-use crate::ast;
+use crate::ast::{self, CssSize};
+use crate::constants;
+use crate::inline::tags::TagKind;
 use crate::tokenizer::Token;
 
 pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::TreeElement> {
@@ -25,11 +27,100 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
         }
 
         Token::ElementBegin { name, attributes } => {
-          todo!();
+          if let Some(e) = crate::inline::tags::get_tag_kind_from_str(&name) {
+            let mut properties: Vec<(&str, &str)> = vec![];
+            let mut unnnamed_properties = vec![];
+            for (key, value) in &attributes {
+              match key.as_str() {
+                "style" | "class" => { properties.push((key, value)); }
+                "" => { unnnamed_properties.push(value); }
+                &_ => {}
+              }
+            }
+
+            match e {
+              TagKind::Span => {
+                let properties_owned = properties.iter().map(|(a, b)| { (a.to_string(), b.to_string()) }).collect();
+                db.push(ast::ParseFrame::HtmlElement { tag: "span".to_string(), properties: properties_owned });
+              }
+
+              TagKind::Size => {
+                if unnnamed_properties.len() >= 1 {
+                  let arg = unnnamed_properties[0].to_lowercase();
+                  let arg = arg.trim();
+                  db.push(ast::ParseFrame::Size { scale: CssSize::new(arg) });
+                } else {
+                  db.push(ast::ParseFrame::Size { scale: CssSize::new("1em") });
+                }
+              }
+
+              TagKind::Link => {
+                for (key, value) in &attributes {
+                  match key.as_str() {
+                    "href" => { properties.push((key, value)); }
+                    &_ => {}
+                  }
+                }
+
+                let properties = properties.iter().map(|(a,b)| { (a.to_string(), b.to_string()) }).collect();
+                db.push(ast::ParseFrame::HtmlElement { tag: "a".to_string(), properties });
+              }
+
+              TagKind::Collapsible => {
+                let mut show_str = constants::collapsible::SHOW_BLOCK_DEFAULT_STRING;
+                let mut hide_str = constants::collapsible::HIDE_BLOCK_DEFAULT_STRING;
+
+                for (key, value) in &attributes {
+                  match key.as_str() {
+                    "show" => { show_str = &value; }
+                    "hide" => { hide_str = &value; }
+                    &_ => {}
+                  }
+                }
+
+                db.push(ast::ParseFrame::Collapsible { text_open: show_str.to_string(), text_closed: hide_str.to_string() });
+              }
+
+              TagKind::Footnote => {
+                todo!();
+              }
+
+              TagKind::FootnoteTarget => {
+                todo!();
+              }
+
+              TagKind::Include => {
+                todo!();
+              }
+
+              TagKind::Div => {
+                let properties = properties.iter().map(|(a,b)| { (a.to_string(), b.to_string()) }).collect();
+                db.push(ast::ParseFrame::HtmlElement { tag: "div".to_string(), properties });
+              }
+            }
+          } else {
+            // ignore
+          }
         }
 
         Token::ElementEnd(name) => {
-          todo!();
+          if let Some(e) = crate::inline::tags::get_tag_kind_from_str(&name) {
+            match e {
+              TagKind::Span | TagKind::Size | TagKind::Link | TagKind::Collapsible | TagKind::Div => {
+                db.pop_and_merge();
+              }
+
+              TagKind::Footnote => {
+                todo!();
+              }
+
+              TagKind::FootnoteTarget | TagKind::Include => {
+                // ignore
+              }
+            }
+          } else { // if not allowed
+            // ignore
+          }
         }
 
         Token::ColoredBeginColorName(name) => {
@@ -76,7 +167,7 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
           db.add(ast::TreeElement::InternalLink { href: link, open_in_new_tab: false, name });
         }
 
-        Token::BlockQuote(level) => {
+        Token::BlockQuote(_) => {
           unreachable!(); // already handled in block parsing
         }
 
@@ -104,7 +195,7 @@ mod tests {
   use crate::ast::TreeElement;
 
   fn make_paragraph(children: Vec<TreeElement>) -> Vec<TreeElement> {
-    vec![TreeElement::Paragraph(children)]
+    children
   }
 
   fn text(s: &str) -> TreeElement {

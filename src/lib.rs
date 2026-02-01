@@ -3,6 +3,7 @@ mod block;
 mod inline;
 mod ast;
 mod renderer;
+mod constants;
 
 pub fn parse(s: String) -> String {
   // get LF string

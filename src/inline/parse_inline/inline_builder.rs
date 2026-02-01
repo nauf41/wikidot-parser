@@ -3,6 +3,7 @@ use crate::ast;
 pub struct InlineBuilder {
   root: Vec<ast::TreeElement>,
   data: Vec<(ast::ParseFrame, Vec<ast::TreeElement>)>,
+  footnotes: Vec<Vec<ast::TreeElement>>,
 }
 
 impl InlineBuilder {
@@ -10,6 +11,7 @@ impl InlineBuilder {
     Self {
       root: vec![],
       data: vec![],
+      footnotes: vec![],
     }
   }
 
@@ -68,6 +70,11 @@ impl InlineBuilder {
     } else {
       self.root.push(element);
     }
+  }
+
+  pub fn register_footnote(&mut self, elements: Vec<ast::TreeElement>) -> std::num::NonZeroUsize {
+    self.footnotes.push(elements);
+    std::num::NonZeroUsize::try_from(self.footnotes.len()).unwrap() // the length won't be zero unless unsafe parallelization
   }
 }
 

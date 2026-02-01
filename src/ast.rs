@@ -1,11 +1,13 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CssSize(String);
+pub struct CssSize(pub String);
 impl CssSize {
   pub fn new(value: &str) -> Self {
-    todo!()
+    Self(value.replace(r#"""#, "").replace("\n", ""))
   }
-  pub fn as_string(self) -> String {
-    self.0
+}
+impl From<CssSize> for String {
+  fn from(value: CssSize) -> String {
+      value.0
   }
 }
 
@@ -95,8 +97,8 @@ pub enum TreeElement {
   Size{scale: CssSize, children: Vec<TreeElement>}, // scaleは有効なCSS値
   Link{href: Url, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
   InternalLink{href: String, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
-  Collapsible(Vec<TreeElement>), // TODO fix: show open/close message
-  Footnote{id: u32, children: Vec<TreeElement>}, // idは構文解析時に自動的に生成
+  Collapsible{text_open: String, text_closed: String, children: Vec<TreeElement>}, // TODO fix: show open/close message
+  Footnote{id: std::num::NonZeroUsize, children: Vec<TreeElement>}, // idは構文解析時に自動的に生成
   QuoteBlock(Vec<TreeElement>),
   Iframe(String), // the value is raw HTML element string
   Tab{
@@ -124,15 +126,15 @@ pub enum ParseFrame {
   Size{scale: CssSize},
   // Link does not contain children
   // InternalLink does not contain children
-  Collapsible,
-  Footnote{id: u32}, // TODO implement [[footnote]] syntax
+  Collapsible{text_open: String, text_closed: String},
+  Footnote{id: std::num::NonZeroUsize}, // TODO implement [[footnote]] syntax
   QuoteBlock,
   // Iframe is a single element. The values are written in HTML and they won't be parsed.
   Tab(String),
   TabView, // this is a div element internally, just for showing renderers begin of TabView
   // Table does not contain TreeElement children
 
-  HtmlElement{tag: String, property: Vec<(String, String)>}, // should be filtered by its tag
+  HtmlElement{tag: String, properties: Vec<(String, String)>}, // should be filtered by its tag
 }
 
 impl ParseFrame {
@@ -148,12 +150,12 @@ impl ParseFrame {
       ParseFrame::Subscript => TreeElement::Subscript(children),
       ParseFrame::Colored{red, green, blue} => TreeElement::Colored{red, green, blue, children},
       ParseFrame::Size{scale} => TreeElement::Size{scale, children},
-      ParseFrame::Collapsible => TreeElement::Collapsible(children),
+      ParseFrame::Collapsible{text_open, text_closed} => TreeElement::Collapsible{text_open, text_closed, children},
       ParseFrame::Footnote{id} => TreeElement::Footnote{id, children},
       ParseFrame::QuoteBlock => TreeElement::QuoteBlock(children),
       ParseFrame::Tab(title) => TreeElement::Tab{title, children},
       ParseFrame::TabView => TreeElement::TabView(children),
-      ParseFrame::HtmlElement { tag, property } => TreeElement::HtmlElement { tag, property, children },
+      ParseFrame::HtmlElement { tag, properties: property } => TreeElement::HtmlElement { tag, property, children },
     }
   }
 
@@ -169,7 +171,7 @@ impl ParseFrame {
       ParseFrame::Subscript => ParseFrameKind::Subscript,
       ParseFrame::Colored{..} => ParseFrameKind::Colored,
       ParseFrame::Size{..} => ParseFrameKind::Size,
-      ParseFrame::Collapsible => ParseFrameKind::Collapsible,
+      ParseFrame::Collapsible{..} => ParseFrameKind::Collapsible,
       ParseFrame::Footnote{..} => ParseFrameKind::Footnote,
       ParseFrame::QuoteBlock =>  ParseFrameKind::QuoteBlock,
       ParseFrame::Tab{..} => ParseFrameKind::Tab,

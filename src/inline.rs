@@ -2,6 +2,7 @@ use crate::{ast::{ParseFrame, TreeElement}, block::BlockLevelAttribute, inline::
 
 mod data_builder;
 mod parse_inline;
+mod tags;
 
 pub fn parse(block_tree: Vec<crate::block::BlockLevelAttribute>) -> Vec<crate::ast::TreeElement> {
   let mut db = DataBuilder::new();
