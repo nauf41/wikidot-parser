@@ -72,9 +72,15 @@ impl InlineBuilder {
     }
   }
 
-  pub fn register_footnote(&mut self, elements: Vec<ast::TreeElement>) -> std::num::NonZeroUsize {
-    self.footnotes.push(elements);
+  pub fn register_footnote(&mut self) -> std::num::NonZeroUsize {
+    self.footnotes.push(vec![]);
     std::num::NonZeroUsize::try_from(self.footnotes.len()).unwrap() // the length won't be zero unless unsafe parallelization
+  }
+
+  pub fn edit_footnote(&mut self, elements: Vec<ast::TreeElement>) {
+    if let Some(_) = self.footnotes.pop() {
+      self.footnotes.push(elements);
+    }
   }
 }
 

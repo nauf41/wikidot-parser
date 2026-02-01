@@ -98,7 +98,7 @@ pub enum TreeElement {
   Link{href: Url, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
   InternalLink{href: String, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
   Collapsible{text_open: String, text_closed: String, children: Vec<TreeElement>}, // TODO fix: show open/close message
-  Footnote{id: std::num::NonZeroUsize, children: Vec<TreeElement>}, // idは構文解析時に自動的に生成
+  Footnote(std::num::NonZeroUsize), // idは構文解析時に自動的に生成
   QuoteBlock(Vec<TreeElement>),
   Iframe(String), // the value is raw HTML element string
   Tab{
@@ -127,7 +127,7 @@ pub enum ParseFrame {
   // Link does not contain children
   // InternalLink does not contain children
   Collapsible{text_open: String, text_closed: String},
-  Footnote{id: std::num::NonZeroUsize}, // TODO implement [[footnote]] syntax
+  Footnote(std::num::NonZeroUsize), // TODO implement [[footnote]] syntax
   QuoteBlock,
   // Iframe is a single element. The values are written in HTML and they won't be parsed.
   Tab(String),
@@ -151,7 +151,7 @@ impl ParseFrame {
       ParseFrame::Colored{red, green, blue} => TreeElement::Colored{red, green, blue, children},
       ParseFrame::Size{scale} => TreeElement::Size{scale, children},
       ParseFrame::Collapsible{text_open, text_closed} => TreeElement::Collapsible{text_open, text_closed, children},
-      ParseFrame::Footnote{id} => TreeElement::Footnote{id, children},
+      ParseFrame::Footnote(id) => TreeElement::Footnote(id),
       ParseFrame::QuoteBlock => TreeElement::QuoteBlock(children),
       ParseFrame::Tab(title) => TreeElement::Tab{title, children},
       ParseFrame::TabView => TreeElement::TabView(children),

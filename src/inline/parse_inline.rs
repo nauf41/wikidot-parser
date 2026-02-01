@@ -82,7 +82,8 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
               }
 
               TagKind::Footnote => {
-                todo!();
+                let footnote_id = db.register_footnote();
+                db.push(ast::ParseFrame::Footnote(footnote_id));
               }
 
               TagKind::FootnoteTarget => {
