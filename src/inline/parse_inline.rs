@@ -166,7 +166,7 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
         }
 
         Token::PageLink { link, name } => {
-          db.add(ast::TreeElement::InternalLink { href: link, open_in_new_tab: false, name });
+          db.add(ast::TreeElement::Link { href: ast::Url(format!("/{}", link)), open_in_new_tab: false, name });
         }
 
         Token::BlockQuote(_) => {
@@ -492,8 +492,8 @@ mod tests {
     ];
     let result = parse_inline(tokens);
     let expected = make_paragraph(vec![
-      TreeElement::InternalLink {
-        href: "about/author".to_string(),
+      TreeElement::Link {
+        href: ast::Url("/about/author".to_string()),
         open_in_new_tab: false,
         name: "author page".to_string(),
       },
@@ -705,7 +705,7 @@ mod tests {
       },
       Token::Text(" ".to_string()),
       Token::PageLink {
-        link: "page2".to_string(),
+        link: "/page2".to_string(),
         name: "link2".to_string(),
       },
     ];
@@ -717,8 +717,8 @@ mod tests {
         name: "link1".to_string(),
       },
       text(" "),
-      TreeElement::InternalLink {
-        href: "page2".to_string(),
+      TreeElement::Link {
+        href: crate::ast::Url("/page2".to_string()),
         open_in_new_tab: false,
         name: "link2".to_string(),
       },
