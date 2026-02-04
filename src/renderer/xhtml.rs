@@ -85,17 +85,6 @@ pub fn render(ast: Vec<crate::ast::TreeElement>) -> String {
             res.close()
           }
 
-          TreeElement::InternalLink { href, open_in_new_tab, name } => {
-            let href_text = format!("/{}", href);
-            let mut params = vec![("href", href_text.as_str())];
-            if open_in_new_tab {
-              params.push(("target", "_blank"));
-            }
-            res.open("a".to_string(), params);
-            res.write(&href);
-            res.close();
-          }
-
           TreeElement::Collapsible{text_open, text_closed, children} => {
             let open_id = format!("collapsible_open{}", unique_id_counter.to_string());
             let close_id = format!("collapsible_close{}", unique_id_counter.to_string());
@@ -111,8 +100,22 @@ pub fn render(ast: Vec<crate::ast::TreeElement>) -> String {
             unique_id_counter+=1;
           }
 
-          TreeElement::Footnote{id, children} => {
-            todo!();
+          TreeElement::Footnote(id) => {
+            res.open("sup".to_string(), vec![]);
+              res.open("a".to_string(), vec![("href", &format!("#{}{}", crate::constants::FOOTNOTE_ID_PREFIX, id.get()))]);
+              res.close();
+            res.close();
+          }
+
+          TreeElement::FootnoteTarget(children) => {
+            res.open("div".to_string(), vec![("class", "footnoteblock")]);
+            iters.push(Some(children.into_iter()));
+          }
+
+          TreeElement::FootnoteTargetChild { id, children } => {
+            res.open("div".to_string(), vec![("id", &format!("{}{}", crate::constants::FOOTNOTE_ID_PREFIX, id.get()))]);
+            res.write(&format!("{}. ", id.get())); // e.g. "1. some footnote"
+            iters.push(Some(children.into_iter()));
           }
 
           TreeElement::QuoteBlock(children) => {
@@ -126,7 +129,7 @@ pub fn render(ast: Vec<crate::ast::TreeElement>) -> String {
           }
 
           TreeElement::Tab{title, children} => {
-
+            todo!()
           }
 
           TreeElement::TabView(_) => {

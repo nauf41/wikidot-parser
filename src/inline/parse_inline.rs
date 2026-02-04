@@ -5,7 +5,7 @@ use crate::constants;
 use crate::inline::tags::TagKind;
 use crate::tokenizer::Token;
 
-pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::TreeElement> {
+pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>, state: &mut super::ParseState) -> Vec<crate::ast::TreeElement> {
   let mut db = inline_builder::InlineBuilder::new();
 
   for token in tokens {
@@ -82,12 +82,17 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
               }
 
               TagKind::Footnote => {
-                let footnote_id = db.register_footnote();
+                let footnote_id = state.register_footnote();
+                db.push(ast::ParseFrame::Superscript);
+                  db.add(ast::TreeElement::Link { href: ast::Url(format!("#{}{}", constants::FOOTNOTE_ID_PREFIX, footnote_id)), open_in_new_tab: false, name: footnote_id.to_string() });
+                db.pop_and_merge();
                 db.push(ast::ParseFrame::Footnote(footnote_id));
               }
 
               TagKind::FootnoteTarget => {
-                db.insert_footnote_block();
+                if let Some(v) = state.insert_footnote_block() {
+                  db.add(v);
+                }
               }
 
               TagKind::Include => {
@@ -113,7 +118,7 @@ pub fn parse_inline(tokens: Vec<crate::tokenizer::Token>) -> Vec<crate::ast::Tre
 
               TagKind::Footnote => {
                 let dat = db.get_now_children();
-                db.edit_footnote(dat);
+                state.edit_footnote(dat);
               }
 
               TagKind::FootnoteTarget | TagKind::Include => {
@@ -206,20 +211,22 @@ mod tests {
 
   #[test]
   fn test_plain_text() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![Token::Text("Hello world".to_string())];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![text("Hello world")]);
     assert_eq!(result, expected);
   }
 
   #[test]
   fn test_multiple_text_tokens() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Text("Hello".to_string()),
       Token::Text(" ".to_string()),
       Token::Text("world".to_string()),
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       text("Hello"),
       text(" "),
@@ -230,12 +237,13 @@ mod tests {
 
   #[test]
   fn test_simple_bold() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("bold text".to_string()),
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![text("bold text")]),
     ]);
@@ -244,12 +252,13 @@ mod tests {
 
   #[test]
   fn test_simple_italics() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Italics,
       Token::Text("italic text".to_string()),
       Token::Italics,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Italics(vec![text("italic text")]),
     ]);
@@ -258,12 +267,13 @@ mod tests {
 
   #[test]
   fn test_simple_underline() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Underline,
       Token::Text("underlined".to_string()),
       Token::Underline,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Underline(vec![text("underlined")]),
     ]);
@@ -272,12 +282,13 @@ mod tests {
 
   #[test]
   fn test_simple_strikethrough() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Strikethrough,
       Token::Text("struck".to_string()),
       Token::Strikethrough,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Strikethrough(vec![text("struck")]),
     ]);
@@ -286,12 +297,13 @@ mod tests {
 
   #[test]
   fn test_simple_superscript() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Superscript,
       Token::Text("super".to_string()),
       Token::Superscript,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Superscript(vec![text("super")]),
     ]);
@@ -300,12 +312,13 @@ mod tests {
 
   #[test]
   fn test_simple_subscript() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Subscript,
       Token::Text("sub".to_string()),
       Token::Subscript,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Subscript(vec![text("sub")]),
     ]);
@@ -314,12 +327,13 @@ mod tests {
 
   #[test]
   fn test_monospaced() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::MonospacedOpen,
       Token::Text("code".to_string()),
       Token::MonospacedClose,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Monospaced(vec![text("code")]),
     ]);
@@ -328,6 +342,7 @@ mod tests {
 
   #[test]
   fn test_nested_bold_and_italics() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("bold ".to_string()),
@@ -337,7 +352,7 @@ mod tests {
       Token::Text(" text".to_string()),
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![
         text("bold "),
@@ -350,6 +365,7 @@ mod tests {
 
   #[test]
   fn test_sequential_bold_and_italics() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("bold".to_string()),
@@ -358,7 +374,7 @@ mod tests {
       Token::Text("italic".to_string()),
       Token::Italics,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![text("bold")]),
       TreeElement::Italics(vec![text("italic")]),
@@ -368,12 +384,13 @@ mod tests {
 
   #[test]
   fn test_color_by_name() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::ColoredBeginColorName("red".to_string()),
       Token::Text("red text".to_string()),
       Token::ColoredEnd,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Colored {
         red: 0xFF,
@@ -387,12 +404,13 @@ mod tests {
 
   #[test]
   fn test_color_by_code() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::ColoredBeginColorCode("FF0000".to_string()),
       Token::Text("red text".to_string()),
       Token::ColoredEnd,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Colored {
         red: 0xFF,
@@ -406,12 +424,13 @@ mod tests {
 
   #[test]
   fn test_color_lowercase_code() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::ColoredBeginColorCode("0000ff".to_string()),
       Token::Text("blue".to_string()),
       Token::ColoredEnd,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Colored {
         red: 0x00,
@@ -425,6 +444,7 @@ mod tests {
 
   #[test]
   fn test_all_named_colors() {
+    let mut state = super::super::ParseState::new();
     let colors = vec![
       ("aqua", (0x00u8, 0xFF, 0xFF)),
       ("black", (0x00, 0x00, 0x00)),
@@ -450,7 +470,7 @@ mod tests {
         Token::Text("text".to_string()),
         Token::ColoredEnd,
       ];
-      let result = parse_inline(tokens);
+      let result = parse_inline(tokens, &mut state);
       let expected = make_paragraph(vec![
         TreeElement::Colored {
           red: r,
@@ -465,13 +485,14 @@ mod tests {
 
   #[test]
   fn test_named_link() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::NamedLink {
         link: "https://example.com".to_string(),
         name: "click here".to_string(),
       },
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Link {
         href: crate::ast::Url("https://example.com".to_string()),
@@ -484,13 +505,14 @@ mod tests {
 
   #[test]
   fn test_page_link() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::PageLink {
         link: "about/author".to_string(),
         name: "author page".to_string(),
       },
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Link {
         href: ast::Url("/about/author".to_string()),
@@ -503,12 +525,13 @@ mod tests {
 
   #[test]
   fn test_newline() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Text("line1".to_string()),
       Token::NewLine,
       Token::Text("line2".to_string()),
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       text("line1"),
       TreeElement::NewLine,
@@ -519,13 +542,14 @@ mod tests {
 
   #[test]
   fn test_multiple_newlines() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Text("a".to_string()),
       Token::NewLine,
       Token::NewLine,
       Token::Text("b".to_string()),
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       text("a"),
       TreeElement::NewLine,
@@ -537,6 +561,7 @@ mod tests {
 
   #[test]
   fn test_bold_and_colored() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::ColoredBeginColorName("blue".to_string()),
@@ -544,7 +569,7 @@ mod tests {
       Token::ColoredEnd,
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![
         TreeElement::Colored {
@@ -560,6 +585,7 @@ mod tests {
 
   #[test]
   fn test_complex_nesting() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("b".to_string()),
@@ -573,7 +599,7 @@ mod tests {
       Token::Text("b2".to_string()),
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![
         text("b"),
@@ -590,11 +616,12 @@ mod tests {
 
   #[test]
   fn test_empty_formatting() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![]),
     ]);
@@ -603,6 +630,7 @@ mod tests {
 
   #[test]
   fn test_superscript_nested_in_bold() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("E".to_string()),
@@ -611,7 +639,7 @@ mod tests {
       Token::Superscript,
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![
         text("E"),
@@ -623,6 +651,7 @@ mod tests {
 
   #[test]
   fn test_subscript_nested_in_bold() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("H".to_string()),
@@ -631,7 +660,7 @@ mod tests {
       Token::Subscript,
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![
         text("H"),
@@ -643,6 +672,7 @@ mod tests {
 
   #[test]
   fn test_color_with_bold_and_italics() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::ColoredBeginColorName("green".to_string()),
       Token::Bold,
@@ -653,7 +683,7 @@ mod tests {
       Token::Bold,
       Token::ColoredEnd,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Colored {
         red: 0x00,
@@ -672,6 +702,7 @@ mod tests {
 
   #[test]
   fn test_monospaced_complex() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Text("prefix ".to_string()),
       Token::MonospacedOpen,
@@ -683,7 +714,7 @@ mod tests {
       Token::MonospacedClose,
       Token::Text(" suffix".to_string()),
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       text("prefix "),
       TreeElement::Monospaced(vec![
@@ -698,6 +729,7 @@ mod tests {
 
   #[test]
   fn test_consecutive_links() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::NamedLink {
         link: "https://example.com".to_string(),
@@ -705,11 +737,11 @@ mod tests {
       },
       Token::Text(" ".to_string()),
       Token::PageLink {
-        link: "/page2".to_string(),
+        link: "page2".to_string(),
         name: "link2".to_string(),
       },
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Link {
         href: crate::ast::Url("https://example.com".to_string()),
@@ -729,11 +761,12 @@ mod tests {
   // Tests for wrongly-layered code (allowed but still tested)
   #[test]
   fn test_unclosed_bold() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("unclosed bold".to_string()),
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     // Unclosed elements remain open in the paragraph
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![text("unclosed bold")]),
@@ -743,11 +776,12 @@ mod tests {
 
   #[test]
   fn test_unopened_closing_token() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Text("text".to_string()),
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     // Unopened closing token creates an empty element
     let expected = make_paragraph(vec![
       text("text"),
@@ -759,6 +793,7 @@ mod tests {
   #[test]
   fn test_interleaved_formatting_bold_italics() {
     // This represents **a//b**c//d (wrongly-layered)
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("a".to_string()),
@@ -768,7 +803,7 @@ mod tests {
       Token::Text("c".to_string()),
       Token::Italics,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     // When closing Bold (which is inside Italics), it closes Italics too, then reopens it
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![
@@ -782,6 +817,7 @@ mod tests {
 
   #[test]
   fn test_interleaved_colors_and_bold() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::ColoredBeginColorName("red".to_string()),
       Token::Bold,
@@ -790,7 +826,7 @@ mod tests {
       Token::Text("more".to_string()),
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     // When closing Colored (which contains Bold), Bold gets reopened after
     let expected = make_paragraph(vec![
       TreeElement::Colored {
@@ -808,6 +844,7 @@ mod tests {
 
   #[test]
   fn test_multiple_colors_sequential() {
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::ColoredBeginColorName("red".to_string()),
       Token::Text("red".to_string()),
@@ -816,7 +853,7 @@ mod tests {
       Token::Text("blue".to_string()),
       Token::ColoredEnd,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Colored {
         red: 0xFF,
@@ -837,6 +874,7 @@ mod tests {
   #[test]
   fn test_bold_italics_toggle() {
     // **a**b//c//d**e**
+    let mut state = super::super::ParseState::new();
     let tokens = vec![
       Token::Bold,
       Token::Text("a".to_string()),
@@ -850,7 +888,7 @@ mod tests {
       Token::Text("e".to_string()),
       Token::Bold,
     ];
-    let result = parse_inline(tokens);
+    let result = parse_inline(tokens, &mut state);
     let expected = make_paragraph(vec![
       TreeElement::Bold(vec![text("a")]),
       text("b"),

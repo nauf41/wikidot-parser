@@ -11,11 +11,11 @@ pub fn parse(s: String) -> String {
   let s = s.replace("\r", "\n"); // CR -> LF
 
   let token = tokenizer::tokenize(s);
-  //println!("{:#?}", token);
+  println!("{:#?}", token);
   let block_tree = block::parse(token);
-  //println!("{:#?}", block_tree);
+  println!("{:#?}", block_tree);
   let ast = inline::parse(block_tree);
-  //println!("{:#?}", ast);
+  println!("{:#?}", ast);
   let html = renderer::xhtml::render(ast);
 
   html
