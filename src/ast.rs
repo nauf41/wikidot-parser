@@ -98,7 +98,10 @@ pub enum TreeElement {
   Link{href: Url, open_in_new_tab: bool, name: String}, // TODO implement parsing name as wikidot string
   Collapsible{text_open: String, text_closed: String, children: Vec<TreeElement>}, // TODO fix: show open/close message
   Footnote(std::num::NonZeroUsize), // idは構文解析時に自動的に生成
-  FootnoteTarget(Vec<TreeElement>), // only elements like this `<a href="#footnote-xxx">xxx</a>` (TreeElement::Link) are passed in this. // TODO implement typical restriction
+
+  FootnoteTarget(Vec<TreeElement>), // 子はFootnoteTargetChildのみ。 // TODO implement typical restriction
+  FootnoteTargetChild{id: std::num::NonZeroUsize, children: Vec<TreeElement>},
+
   QuoteBlock(Vec<TreeElement>),
   Iframe(String), // the value is raw HTML element string
   Tab{
